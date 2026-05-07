@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Data Lineage Explorer</title>
+<style>
+/* ─────────────────────────────────────────── Tokens */
+:root{
+  --bg:#f6f5f1;
+  --surface:#fff;
+  --surface2:#f1efeb;
+  --surface3:#e6e3dd;
+  --border:rgba(0,0,0,.08);
+  --border2:rgba(0,0,0,.14);
+  --text:#1a1a18;
+  --text2:#5f5e58;
+  --text3:#9a9890;
+  --blue:#2870d4;
+  --blue-bg:rgba(40,112,212,.08);
+  --blue-bd:rgba(40,112,212,.28);
+  --teal:#0a6e52;
+  --teal-bg:rgba(10,110,82,.08);
+  --teal-bd:rgba(10,110,82,.28);
+  --amber:#8a5100;
+  --amber-bg:rgba(138,81,0,.08);
+  --amber-bd:rgba(138,81,0,.28);
+  --rose:#b02030;
+  --rose-bg:rgba(176,32,48,.07);
+  --rose-bd:rgba(176,32,48,.26);
+  --green:#1a6e42;
+  --green-bg:rgba(26,110,66,.07);
+  --green-bd:rgba(26,110,66,.26);
+  --violet:#5242c8;
+  --violet-bg:rgba(82,66,200,.08);
+  --violet-bd:rgba(82,66,200,.26);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:0 4px 12px rgba(0,0,0,.08),0 2px 5px rgba(0,0,0,.05);
+  --shadow-lg:0 12px 36px rgba(0,0,0,.12),0 4px 10px rgba(0,0,0,.06);
+  --r:9px;
+  --r-sm:5px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:13px;line-height:1.5;
+  background:var(--bg);color:var(--text);
+  display:flex;flex-direction:column;height:100vh;overflow:hidden;
+}
+code,.mono{font-family:'SF Mono','Fira Code','JetBrains Mono',monospace;}
+
+/* ─────────────────────────────────────────── Header */
+.hdr{
+  height:50px;flex-shrink:0;
+  background:var(--surface);border-bottom:.5px solid var(--border2);
+  display:flex;align-items:center;gap:14px;padding:0 22px;
+  box-shadow:0 1px 0 rgba(0,0,0,.03);
+}
+.hdr-logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14.5px;}
+.hdr-icon{
+  width:22px;height:22px;border-radius:5px;
+  background:linear-gradient(135deg,#2870d4,#5242c8);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;flex-shrink:0;
+}
+.hdr-sep{width:1px;height:18px;background:var(--border2);}
+.hdr-tag{font-size:11px;color:var(--text3);}
+
+/* ─────────────────────────────────────────── Layout */
+.layout{display:flex;flex:1;min-height:0;overflow:hidden;}
+
+/* ─────────────────────────────────────────── Sidebar */
+.sidebar{
+  width:255px;min-width:255px;flex-shrink:0;
+  background:var(--surface);border-right:.5px solid var(--border2);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.sb-sec{padding:13px 13px 11px;border-bottom:.5px solid var(--border);}
+.sb-lbl{
+  font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--text3);margin-bottom:6px;
+}
+
+.sel-wrap{position:relative;}
+.sel-wrap::after{
+  content:'▾';position:absolute;right:9px;top:50%;transform:translateY(-50%);
+  color:var(--text3);pointer-events:none;font-size:11px;
+}
+select{
+  width:100%;background:var(--surface2);border:.5px solid var(--border2);
+  border-radius:var(--r-sm);color:var(--text);
+  padding:7px 26px 7px 9px;font-family:inherit;font-size:12.5px;
+  appearance:none;cursor:pointer;outline:none;transition:border-color .15s;
+}
+select:focus{border-color:var(--blue);}
+select:disabled{opacity:.5;cursor:not-allowed;}
+
+.srch{position:relative;margin-bottom:6px;}
+.srch input{
+  width:100%;background:var(--surface2);border:.5px solid var(--border2);
+  border-radius:var(--r-sm);color:var(--text);
+  padding:6px 9px 6px 28px;font-family:inherit;font-size:12px;
+  outline:none;transition:border-color .15s;
+}
+.srch input:focus{border-color:var(--blue);}
+.srch input::placeholder{color:var(--text3);}
+.srch::before{
+  content:'⌕';position:absolute;left:8px;top:50%;transform:translateY(-50%);
+  color:var(--text3);font-size:14px;pointer-events:none;
+}
+
+.flist{flex:1;overflow-y:auto;padding:4px 6px;}
+.flist::-webkit-scrollbar{width:3px;}
+.flist::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:2px;}
+
+.fi{
+  padding:7px 9px;border-radius:var(--r-sm);cursor:pointer;
+  display:flex;align-items:flex-start;gap:7px;
+  border:.5px solid transparent;transition:background .1s;
+}
+.fi:hover{background:var(--surface2);}
+.fi.active{background:var(--blue-bg);border-color:var(--blue-bd);}
+.fi-dot{width:6px;height:6px;border-radius:50%;background:var(--border2);flex-shrink:0;margin-top:5px;}
+.fi.active .fi-dot{background:var(--blue);}
+.fi-name{font-size:12.5px;font-weight:500;color:var(--text);}
+.fi.active .fi-name{color:var(--blue);}
+.fi-sub{font-size:10px;color:var(--text3);margin-top:1px;word-break:break-all;line-height:1.4;}
+
+.legend{padding:10px 13px 12px;border-top:.5px solid var(--border);}
+.leg-row{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text2);margin-top:4px;}
+.leg-sw{width:9px;height:9px;border-radius:2px;flex-shrink:0;border:.5px solid;}
+
+/* ─────────────────────────────────────────── Main */
+.main{
+  flex:1;overflow:auto;
+  background:var(--bg);
+  display:flex;flex-direction:column;
+}
+.main::-webkit-scrollbar{width:7px;height:7px;}
+.main::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:4px;}
+.main::-webkit-scrollbar-thumb:hover{background:var(--border2);}
+
+/* dotted background pattern for canvas */
+#gs{
+  padding:24px 28px 0;
+  background-image:radial-gradient(rgba(0,0,0,.05) 1px, transparent 1px);
+  background-size:18px 18px;background-position:0 0;
+}
+
+.empty{
+  flex:1;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:11px;color:var(--text3);padding:60px;
+}
+.empty-icon{font-size:34px;opacity:.25;}
+.empty-title{font-size:16px;font-weight:600;color:var(--text);opacity:.4;}
+.empty-sub{font-size:12px;opacity:.55;text-align:center;line-height:1.7;}
+.ldg{display:flex;align-items:center;gap:9px;padding:60px;color:var(--text3);font-size:13px;}
+.spin{
+  width:14px;height:14px;border:2px solid var(--surface3);border-top-color:var(--blue);
+  border-radius:50%;animation:spin .6s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.gh{margin-bottom:22px;}
+.gh-title{font-size:18px;font-weight:600;color:var(--text);letter-spacing:-.01em;}
+.gh-sub{font-size:11px;color:var(--text3);margin-top:2px;font-family:inherit;word-break:break-all;}
+.gh-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+.badge{
+  font-size:10.5px;font-weight:500;
+  padding:3px 9px;border-radius:10px;border:.5px solid;white-space:nowrap;
+  display:inline-flex;align-items:center;gap:4px;
+}
+.badge-blue{background:var(--blue-bg);border-color:var(--blue-bd);color:var(--blue);}
+.badge-teal{background:var(--teal-bg);border-color:var(--teal-bd);color:var(--teal);}
+
+/* ─────────────────────────────────────────── DAG canvas */
+#dag-outer{position:relative;overflow:visible;}
+#dag-svg{position:absolute;top:0;left:0;pointer-events:none;overflow:visible;}
+
+/* ─────────────────────────────────────────── Node cards */
+.nc{
+  position:absolute;
+  border-radius:var(--r);border:.5px solid;
+  background:var(--surface);
+  box-shadow:var(--shadow-sm);
+  overflow:hidden;
+  transition:box-shadow .18s,transform .18s,border-color .15s;
+}
+.nc:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);z-index:10;}
+.nc.is-root{box-shadow:0 0 0 2px var(--blue-bd),var(--shadow-md);}
+.nc.is-leaf{box-shadow:0 0 0 2px var(--teal-bd),var(--shadow-sm);}
+
+.nc-hdr{
+  padding:7px 11px 6px;
+  display:flex;align-items:center;justify-content:space-between;gap:6px;
+  border-bottom:.5px solid var(--border);
+}
+.nc-type{
+  font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;
+  padding:2px 6px;border-radius:3px;
+}
+.nc-actions{display:flex;align-items:center;gap:4px;}
+.nc-btn{
+  width:20px;height:20px;border-radius:4px;
+  border:.5px solid var(--border2);background:var(--surface2);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:11px;color:var(--text2);flex-shrink:0;
+  transition:background .12s,border-color .12s,color .12s;
+  user-select:none;padding:0;line-height:1;
+}
+.nc-btn:hover{background:var(--blue-bg);border-color:var(--blue-bd);color:var(--blue);}
+
+.nc-body{padding:8px 11px 9px;}
+.nc-name{font-size:12.5px;font-weight:600;line-height:1.3;word-break:break-all;}
+.nc-meta{font-size:10px;color:var(--text3);margin-top:2px;}
+
+/* col_expr strip */
+.nc-expr{
+  border-top:.5px solid var(--border);
+  padding:5px 11px 7px;
+  font-size:10.5px;
+  background:var(--amber-bg);
+}
+.nc-expr-lbl{
+  font-size:8.5px;text-transform:uppercase;letter-spacing:.07em;
+  color:var(--amber);font-weight:700;margin-bottom:3px;
+  display:flex;align-items:center;gap:4px;
+}
+.nc-expr-lbl::before{content:'fx';font-size:8px;background:var(--amber);color:#fff;padding:1px 4px;border-radius:3px;letter-spacing:0;}
+.nc-expr-list{display:flex;flex-direction:column;gap:2px;}
+.nc-expr-item{
+  font-family:'SF Mono','Fira Code',monospace;
+  color:var(--amber);line-height:1.4;
+  word-break:break-all;
+}
+
+/* node-type colors */
+.nt-datasource{border-color:var(--teal-bd);}
+.nt-datasource .nc-hdr{background:linear-gradient(180deg,var(--teal-bg),transparent);}
+.nt-datasource .nc-type{background:var(--teal-bg);color:var(--teal);}
+.nt-datasource .nc-name{color:var(--teal);}
+
+.nt-modifymodel{border-color:var(--blue-bd);}
+.nt-modifymodel .nc-hdr{background:linear-gradient(180deg,var(--blue-bg),transparent);}
+.nt-modifymodel .nc-type{background:var(--blue-bg);color:var(--blue);}
+.nt-modifymodel .nc-name{color:var(--blue);}
+
+.nt-aggregation{border-color:var(--violet-bd);}
+.nt-aggregation .nc-hdr{background:linear-gradient(180deg,var(--violet-bg),transparent);}
+.nt-aggregation .nc-type{background:var(--violet-bg);color:var(--violet);}
+.nt-aggregation .nc-name{color:var(--violet);}
+
+.nt-unknown{border-color:var(--border2);}
+.nt-unknown .nc-hdr{background:var(--surface2);}
+.nt-unknown .nc-type{background:var(--surface2);color:var(--text3);}
+.nt-unknown .nc-name{color:var(--text2);}
+
+/* root/leaf indicators in header */
+.nc-flag{
+  font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+  padding:1px 5px;border-radius:3px;margin-left:auto;
+}
+.nc-flag.root{background:var(--blue);color:#fff;}
+.nc-flag.leaf{background:var(--teal);color:#fff;}
+
+/* ─────────────────────────────────────────── Edge condition pills */
+/* Render edge labels as compact pill badges that expand on hover */
+.edge-pill-group{
+  background:var(--surface);
+  border:.5px solid var(--border2);
+  border-radius:14px;
+  padding:3px 7px;
+  display:inline-flex;align-items:center;gap:5px;
+  box-shadow:var(--shadow-sm);
+  font-size:10.5px;font-weight:600;
+  cursor:default;
+  transition:box-shadow .15s,transform .15s;
+}
+.edge-pill-group:hover{box-shadow:var(--shadow-md);transform:translateY(-1px);}
+.edge-pill{
+  display:inline-flex;align-items:center;gap:3px;
+  padding:1px 6px;border-radius:8px;
+  font-size:9.5px;font-weight:700;
+  letter-spacing:.04em;text-transform:uppercase;
+}
+.edge-pill.row{background:var(--rose-bg);color:var(--rose);border:.5px solid var(--rose-bd);}
+.edge-pill.join{background:var(--green-bg);color:var(--green);border:.5px solid var(--green-bd);}
+.edge-pill-icon{font-size:9px;}
+
+/* ─────────────────────────────────────────── Source section */
+#ss{margin:30px 28px 40px;border-top:.5px solid var(--border2);padding-top:22px;}
+.ss-title{font-size:15px;font-weight:600;color:var(--text);margin-bottom:3px;}
+.ss-sub{font-size:11px;color:var(--text3);margin-bottom:16px;}
+.ss-cards{display:flex;flex-wrap:wrap;gap:11px;}
+
+.sc{
+  background:var(--surface);border:.5px solid var(--border2);
+  border-radius:var(--r);width:255px;overflow:hidden;
+  box-shadow:var(--shadow-sm);transition:border-color .15s,box-shadow .15s;
+}
+.sc:hover{border-color:var(--teal-bd);box-shadow:var(--shadow-md);}
+.sc-hdr{
+  padding:9px 13px;background:var(--teal-bg);
+  display:flex;align-items:center;justify-content:space-between;
+  cursor:pointer;user-select:none;gap:8px;
+  border-bottom:.5px solid transparent;transition:background .1s;
+}
+.sc.open .sc-hdr{border-bottom-color:var(--border);}
+.sc-name{font-size:12.5px;font-weight:600;color:var(--teal);}
+.sc-tog{color:var(--teal);font-size:11px;transition:transform .2s;opacity:.6;}
+.sc.open .sc-tog{transform:rotate(180deg);}
+.sc-body{display:none;padding:7px 11px 10px;}
+.sc.open .sc-body{display:block;}
+.sc-flist{display:flex;flex-direction:column;gap:2px;max-height:220px;overflow-y:auto;}
+.sc-flist::-webkit-scrollbar{width:3px;}
+.sc-flist::-webkit-scrollbar-thumb{background:var(--surface3);}
+.sc-fi{
+  font-size:11px;padding:5px 7px;border-radius:4px;
+  display:flex;align-items:center;gap:6px;
+  color:var(--text2);font-family:'SF Mono','Fira Code',monospace;
+}
+.sc-fi.used{background:var(--teal-bg);color:var(--teal);font-weight:500;}
+.sc-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0;opacity:.65;}
+.sc-meta{font-size:9px;opacity:.55;margin-top:1px;}
+.sc-loading{font-size:11px;color:var(--text3);padding:5px 0;}
+
+/* ─────────────────────────────────────────── Modal */
+.modal-overlay{
+  display:none;position:fixed;inset:0;z-index:1000;
+  background:rgba(20,20,18,.4);backdrop-filter:blur(3px);
+  align-items:center;justify-content:center;padding:24px;
+  animation:fadeIn .15s ease;
+}
+.modal-overlay.open{display:flex;}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+.modal{
+  background:var(--surface);border-radius:12px;
+  border:.5px solid var(--border2);box-shadow:var(--shadow-lg);
+  width:100%;max-width:680px;max-height:82vh;
+  display:flex;flex-direction:column;overflow:hidden;
+  animation:popIn .2s ease;
+}
+@keyframes popIn{from{opacity:0;transform:scale(.96) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+
+.modal-hdr{
+  padding:14px 20px;border-bottom:.5px solid var(--border);
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  flex-shrink:0;background:var(--surface);
+}
+.modal-title{font-size:15px;font-weight:600;color:var(--text);line-height:1.3;}
+.modal-sub{
+  font-size:10.5px;color:var(--text3);margin-top:3px;
+  font-family:'SF Mono','Fira Code',monospace;word-break:break-all;
+}
+.modal-close{
+  width:28px;height:28px;border-radius:6px;
+  border:.5px solid var(--border2);background:var(--surface2);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:14px;color:var(--text2);flex-shrink:0;
+  transition:background .12s;
+}
+.modal-close:hover{background:var(--surface3);color:var(--text);}
+
+.modal-body{
+  overflow-y:auto;padding:16px 20px 20px;
+  display:flex;flex-direction:column;gap:18px;
+}
+.modal-body::-webkit-scrollbar{width:5px;}
+.modal-body::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:3px;}
+
+.ms-title{
+  font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+  display:flex;align-items:center;gap:6px;margin-bottom:8px;
+}
+.ms-title-tag{
+  font-size:9px;font-weight:700;
+  padding:1px 7px;border-radius:8px;letter-spacing:.04em;
+}
+.ms-title.col .ms-title-tag{background:var(--amber);color:#fff;}
+.ms-title.row .ms-title-tag{background:var(--rose);color:#fff;}
+.ms-title.join .ms-title-tag{background:var(--green);color:#fff;}
+.ms-title-name{color:var(--text);font-size:12px;font-weight:600;text-transform:none;letter-spacing:0;}
+
+.ms-list{display:flex;flex-direction:column;gap:5px;}
+.ms-item{
+  font-size:11.5px;font-family:'SF Mono','Fira Code',monospace;
+  padding:7px 10px;border-radius:var(--r-sm);border:.5px solid;
+  word-break:break-word;line-height:1.5;
+}
+.ms-item.col{background:var(--amber-bg);border-color:var(--amber-bd);color:var(--amber);}
+.ms-item.row{background:var(--rose-bg); border-color:var(--rose-bd); color:var(--rose);}
+.ms-item.join{background:var(--green-bg);border-color:var(--green-bd);color:var(--green);}
+
+.ms-empty{
+  font-size:11px;color:var(--text3);font-style:italic;padding:6px 0;
+}
+
+/* ─────────────────────────────────────────── Animations */
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.nc{animation:fadeUp .22s ease both;}
+#ss{animation:fadeUp .28s ease both .04s;}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-logo">
+    <div class="hdr-icon">L</div>
+    Lineage <span style="color:var(--blue);font-weight:800">Explorer</span>
+  </div>
+  <div class="hdr-sep"></div>
+  <div class="hdr-tag">Column-level data lineage · Axiom Regulatory Reporting</div>
+</header>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sb-sec">
+      <div class="sb-lbl">Application</div>
+      <div class="sel-wrap">
+        <select id="app-select"><option value="">— select application —</option></select>
+      </div>
+    </div>
+    <div class="sb-sec">
+      <div class="sb-lbl">Data Model</div>
+      <div class="sel-wrap">
+        <select id="model-select" disabled><option value="">— select model —</option></select>
+      </div>
+    </div>
+    <div class="sb-sec" style="flex:1;display:flex;flex-direction:column;overflow:hidden;border-bottom:none;padding-bottom:0">
+      <div class="sb-lbl">Fields</div>
+      <div class="srch"><input type="text" id="field-search" placeholder="filter fields…"/></div>
+      <div class="flist" id="field-list">
+        <div style="color:var(--text3);font-size:11px;padding:5px 3px">Select an application to begin.</div>
+      </div>
+    </div>
+    <div class="legend">
+      <div class="sb-lbl" style="margin-bottom:3px">Legend</div>
+      <div class="leg-row"><div class="leg-sw" style="background:var(--teal-bg);border-color:var(--teal-bd)"></div>DataSource (root)</div>
+      <div class="leg-row"><div class="leg-sw" style="background:var(--blue-bg);border-color:var(--blue-bd)"></div>ModifyModel</div>
+      <div class="leg-row"><div class="leg-sw" style="background:var(--violet-bg);border-color:var(--violet-bd)"></div>Aggregation</div>
+      <div class="leg-row"><div class="leg-sw" style="background:var(--amber-bg);border-color:var(--amber-bd)"></div>Column expression</div>
+      <div class="leg-row"><div class="leg-sw" style="background:var(--rose-bg);border-color:var(--rose-bd)"></div>Row filter</div>
+      <div class="leg-row"><div class="leg-sw" style="background:var(--green-bg);border-color:var(--green-bd)"></div>Join condition</div>
+    </div>
+  </aside>
+
+  <!-- Main canvas -->
+  <main class="main" id="main">
+    <div class="empty" id="empty-state">
+      <div class="empty-icon">◈</div>
+      <div class="empty-title">Select a field to trace lineage</div>
+      <div class="empty-sub">Choose an application, a data model, then click a field<br/>to see its full lineage from root to source.</div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this) closeModal()">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div style="flex:1;min-width:0">
+        <div class="modal-title" id="modal-title">Conditions</div>
+        <div class="modal-sub"   id="modal-sub"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+const API = '';
+const NODE_W_MIN = 220;
+const NODE_W_MAX = 360;
+const NODE_PAD_X = 70;
+const NODE_PAD_Y_BASE = 90;
+const CANVAS_PAD = 44;
+const CHAR_W = 7.0;
+
+const state = { application:'', model:'', allFields:[], graphData:null };
+
+/* ──────────── helpers ──────────── */
+function esc(s){
+  return String(s??'')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function safeId(s){ return String(s||'').replace(/[^a-zA-Z0-9_-]/g,'_'); }
+
+async function apiFetch(path){
+  const r=await fetch(API+path);
+  if(!r.ok){
+    let m=`${r.status} ${r.statusText}`;
+    try{ const j=await r.json(); m=j?.detail||JSON.stringify(j)||m; }catch{}
+    throw new Error(m);
+  }
+  return r.json();
+}
+
+/* ──────────── boot: applications ──────────── */
+(async()=>{
+  const appSel=document.getElementById('app-select');
+  const modelSel=document.getElementById('model-select');
+  try{
+    const {applications}=await apiFetch('/api/applications');
+    (applications||[]).forEach(a=>{
+      const o=document.createElement('option');
+      o.value=a; o.textContent=a; appSel.appendChild(o);
+    });
+  }catch(e){ console.error(e); }
+
+  appSel.addEventListener('change', async e=>{
+    const app=e.target.value;
+    state.application=app; state.model='';
+    modelSel.innerHTML='<option value="">— select model —</option>';
+    modelSel.disabled=!app;
+    resetFieldList(app?'Loading models…':'Select an application to begin.');
+    if(!app) return;
+    try{
+      const {datamodels}=await apiFetch(`/api/datamodels?application=${encodeURIComponent(app)}`);
+      modelSel.innerHTML='<option value="">— select model —</option>';
+      if(!datamodels.length){
+        resetFieldList('No models for this application.');
+      }
+      (datamodels||[]).forEach(m=>{
+        const o=document.createElement('option');
+        o.value=m.model_name;
+        o.textContent=`${m.model_name} (v${m.model_version})`;
+        modelSel.appendChild(o);
+      });
+      modelSel.disabled=false;
+      if(datamodels.length) resetFieldList('Select a model to see fields.');
+    }catch(err){
+      modelSel.disabled=true;
+      resetFieldList(err.message);
+    }
+  });
+
+  modelSel.addEventListener('change', async e=>{
+    const model=e.target.value;
+    state.model=model;
+    if(!model){ resetFieldList('Select a model to see fields.'); return; }
+    resetFieldList('Loading fields…');
+    try{
+      const {fields}=await apiFetch(
+        `/api/datamodels/${encodeURIComponent(model)}/fields?application=${encodeURIComponent(state.application)}`
+      );
+      state.allFields=fields||[];
+      renderFieldList(state.allFields,'');
+    }catch(err){
+      document.getElementById('field-list').innerHTML=
+        `<div style="color:var(--rose);font-size:11px;padding:5px">${esc(err.message)}</div>`;
+    }
+  });
+
+  document.getElementById('field-search').addEventListener('input',e=>{
+    renderFieldList(state.allFields, e.target.value.toLowerCase());
+  });
+})();
+
+function resetFieldList(msg){
+  state.allFields=[];
+  document.getElementById('field-list').innerHTML=
+    `<div style="color:var(--text3);font-size:11px;padding:5px 3px">${esc(msg)}</div>`;
+}
+
+/* ──────────── field list ──────────── */
+function renderFieldList(fields,filter){
+  const list=document.getElementById('field-list');
+  const f=(fields||[]).filter(f=>{
+    const n=(f.field_name||'').toLowerCase();
+    const p=(f.field_path||'').toLowerCase();
+    return n.includes(filter)||p.includes(filter);
+  });
+  if(!f.length){
+    list.innerHTML='<div style="color:var(--text3);font-size:11px;padding:5px 3px">No match.</div>';
+    return;
+  }
+  list.innerHTML=f.map(fld=>{
+    const lp=lineagePath(fld);
+    const dn=displayName(fld);
+    const sub=lp.split('/').slice(-2).join('/');
+    return `<div class="fi" data-path="${esc(lp)}"
+      onclick="loadLineage(this,'${esc(lp)}','${esc(dn)}')">
+      <div class="fi-dot"></div>
+      <div style="min-width:0;flex:1">
+        <div class="fi-name">${esc(dn)}</div>
+        <div class="fi-sub">${esc(sub)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function displayName(f){
+  const n=f?.field_name||'';
+  return n.includes('.')?n.split('.').pop():n;
+}
+function lineagePath(f){
+  const fp=String(f?.field_path||'');
+  if(fp&&fp.includes('/')&&fp.split('/').pop().includes('.')) return fp;
+  const key=f?.field_type, val=f?.field_name;
+  if(key&&val){
+    const parts=fp.split('/').filter(Boolean);
+    const base=parts.slice(0,-1).join('/');
+    return base?`${base}/${key}.${val}`:`${key}.${val}`;
+  }
+  return fp;
+}
+
+/* ──────────── load lineage ──────────── */
+async function loadLineage(el,fieldPath,fieldName){
+  document.querySelectorAll('.fi').forEach(i=>i.classList.remove('active'));
+  el.classList.add('active');
+  const main=document.getElementById('main');
+  main.innerHTML='<div class="ldg"><div class="spin"></div>Tracing lineage…</div>';
+  try{
+    const data=await apiFetch(
+      `/api/lineage?application=${encodeURIComponent(state.application)}&field_path=${encodeURIComponent(fieldPath)}`
+    );
+    state.graphData=data;
+    renderAll(main,data,fieldName,fieldPath);
+  }catch(e){
+    main.innerHTML=`<div style="color:var(--rose);padding:40px;font-size:12px">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+/* ──────────── render all ──────────── */
+function renderAll(container,data,fieldName,fieldPath){
+  container.innerHTML='';
+
+  const gs=document.createElement('div'); gs.id='gs';
+  const gh=document.createElement('div'); gh.className='gh';
+  gh.innerHTML=`
+    <div class="gh-title">${esc(fieldName)}</div>
+    <div class="gh-sub mono">${esc(fieldPath)}</div>
+    <div class="gh-badges">
+      <span class="badge badge-blue">${(data.nodes||[]).length} nodes · ${(data.edges||[]).length} edges</span>
+      ${(data.datasources||[]).map(d=>`<span class="badge badge-teal">⬡ ${esc(d)}</span>`).join('')}
+    </div>`;
+  gs.appendChild(gh);
+  const dagOuter=document.createElement('div'); dagOuter.id='dag-outer';
+  gs.appendChild(dagOuter);
+  container.appendChild(gs);
+
+  const ss=document.createElement('div'); ss.id='ss';
+  container.appendChild(ss);
+
+  renderDAG(dagOuter, data);
+  renderSources(ss, data.datasources||[], data.nodes||[]);
+}
+
+/* ──────────── DAG renderer ──────────── */
+function renderDAG(outer,{nodes,edges}){
+  const nodeMap={};
+  nodes.forEach(n=>nodeMap[n.id]=n);
+
+  /* adjacency */
+  const childOf={}, parentOf={};
+  edges.forEach(e=>{
+    (childOf[e.source]=childOf[e.source]||[]).push(e);
+    (parentOf[e.target]=parentOf[e.target]||[]).push(e);
+  });
+
+  /* level assignment via longest-path layering from roots */
+  const allTargets=new Set(edges.map(e=>e.target));
+  const roots=nodes.filter(n=>!allTargets.has(n.id));
+  const levelMap={};
+  roots.forEach(r=>levelMap[r.id]=0);
+  // Topo BFS using max-depth
+  let changed=true;
+  while(changed){
+    changed=false;
+    edges.forEach(e=>{
+      if(levelMap[e.source]===undefined) return;
+      const tgt=e.target;
+      const lv=(levelMap[e.source]||0)+1;
+      if(levelMap[tgt]===undefined||levelMap[tgt]<lv){
+        levelMap[tgt]=lv; changed=true;
+      }
+    });
+  }
+  nodes.forEach(n=>{ if(levelMap[n.id]===undefined) levelMap[n.id]=0; });
+
+  /* group by level */
+  const levels={};
+  nodes.forEach(n=>{
+    const lv=levelMap[n.id]||0;
+    (levels[lv]=levels[lv]||[]).push(n.id);
+  });
+  const maxLevel=Math.max(...Object.keys(levels).map(Number));
+
+  /* per-node sizes */
+  const nodeSizes={};
+  nodes.forEach(n=>{
+    const hasExpr=n.col_expr&&n.col_expr.length>0;
+    const dsLen=(n.datasource||n.label||'').length;
+    const lblLen=(n.label||'').length;
+    const exprMaxLen=hasExpr?Math.max(...n.col_expr.map(e=>e.length)):0;
+    const contentLen=Math.max(dsLen,lblLen,exprMaxLen);
+    let w=Math.max(NODE_W_MIN, Math.min(contentLen*CHAR_W+50, NODE_W_MAX));
+    let h=72;
+    if(hasExpr){
+      // Estimate wrapped lines per expr at width w
+      const charsPerLine=Math.floor((w-22)/CHAR_W);
+      const exprLines=n.col_expr.reduce((s,e)=>s+Math.max(1,Math.ceil(e.length/charsPerLine)),0);
+      h += 24 + exprLines*15 + 4;
+    }
+    nodeSizes[n.id]={w, h};
+  });
+
+  /* level heights */
+  const levelH={};
+  Object.entries(levels).forEach(([lv,ids])=>{
+    levelH[lv]=Math.max(...ids.map(id=>nodeSizes[id].h));
+  });
+
+  /* edge label height — pills are compact, only need ~28px of vertical room */
+  const interGap={};
+  edges.forEach(e=>{
+    const sl=levelMap[e.source]??0;
+    const lbCount=(e.labels||[]).length;
+    const need = lbCount>0 ? 32 : 0;
+    interGap[sl]=Math.max(interGap[sl]||0, need);
+  });
+
+  /* Y per level */
+  const levelY={};
+  let yAcc=CANVAS_PAD;
+  for(let lv=0;lv<=maxLevel;lv++){
+    levelY[lv]=yAcc;
+    yAcc+=(levelH[lv]||72)+NODE_PAD_Y_BASE+(interGap[lv]||0);
+  }
+
+  /* X per level: total width = sum(node widths) + gaps */
+  const posMap={};
+  let canvasW=0;
+  Object.entries(levels).forEach(([lv,ids])=>{
+    const totalW=ids.reduce((s,id)=>s+nodeSizes[id].w,0)+(ids.length-1)*NODE_PAD_X;
+    let x=CANVAS_PAD;
+    ids.forEach(id=>{
+      posMap[id]={x, y:levelY[lv], w:nodeSizes[id].w, h:nodeSizes[id].h};
+      x+=nodeSizes[id].w+NODE_PAD_X;
+    });
+    canvasW=Math.max(canvasW, CANVAS_PAD+totalW+CANVAS_PAD);
+  });
+  const canvasH=yAcc+CANVAS_PAD;
+
+  outer.style.cssText=`width:${canvasW}px;height:${canvasH}px;position:relative;margin-bottom:8px;`;
+
+  /* SVG */
+  const NS='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(NS,'svg');
+  svg.setAttribute('width',canvasW);
+  svg.setAttribute('height',canvasH);
+  svg.id='dag-svg';
+
+  const defs=document.createElementNS(NS,'defs');
+  defs.innerHTML=`
+    <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#a8aebc"/>
+    </marker>`;
+  svg.appendChild(defs);
+
+  /* Edges (curved orthogonal) */
+  edges.forEach(edge=>{
+    const sp=posMap[edge.source], tp=posMap[edge.target];
+    if(!sp||!tp) return;
+    const x1=sp.x+sp.w/2, y1=sp.y+sp.h;
+    const x2=tp.x+tp.w/2, y2=tp.y;
+    // Use a softer curve for cleaner look
+    const dy=y2-y1;
+    const c1y=y1+dy*0.5;
+    const c2y=y2-dy*0.5;
+    const path=document.createElementNS(NS,'path');
+    path.setAttribute('d',`M${x1},${y1} C${x1},${c1y} ${x2},${c2y} ${x2},${y2}`);
+    path.setAttribute('fill','none');
+    path.setAttribute('stroke','#cdd2dc');
+    path.setAttribute('stroke-width','1.5');
+    path.setAttribute('marker-end','url(#arr)');
+    svg.appendChild(path);
+  });
+
+  outer.appendChild(svg);
+
+  /* ────── EDGE PILL GROUPS as positioned HTML ────── */
+  edges.forEach(edge=>{
+    if(!edge.labels||!edge.labels.length) return;
+    const sp=posMap[edge.source], tp=posMap[edge.target];
+    if(!sp||!tp) return;
+    const rowCount=(edge.labels||[]).filter(l=>l.type==='row').length;
+    const joinCount=(edge.labels||[]).filter(l=>l.type==='join').length;
+    const midX=(sp.x+sp.w/2 + tp.x+tp.w/2)/2;
+    const midY=(sp.y+sp.h + tp.y)/2;
+
+    const pill=document.createElement('div');
+    pill.className='edge-pill-group';
+    pill.style.cssText=`position:absolute;left:0;top:0;transform:translate(-50%,-50%);left:${midX}px;top:${midY}px;`;
+    pill.title='Click any node to view full conditions';
+
+    // Build pills
+    let html='';
+    if(rowCount){
+      html+=`<span class="edge-pill row" title="${rowCount} row filter${rowCount>1?'s':''}"><span class="edge-pill-icon">▣</span>${rowCount} ROW</span>`;
+    }
+    if(joinCount){
+      html+=`<span class="edge-pill join" title="${joinCount} join condition${joinCount>1?'s':''}"><span class="edge-pill-icon">⋈</span>${joinCount} JOIN</span>`;
+    }
+    pill.innerHTML=html;
+
+    // On click, open modal scoped to the *target* node (which carries the conditions in modal.incoming)
+    pill.style.cursor='pointer';
+    pill.style.pointerEvents='auto';
+    pill.addEventListener('click',()=>openNodeModal(edge.target));
+    outer.appendChild(pill);
+  });
+
+  /* ────── NODE CARDS ────── */
+  nodes.forEach((node,i)=>{
+    const pos=posMap[node.id]; if(!pos) return;
+    const typeClass='nt-'+(node.obj_type||'unknown').toLowerCase();
+    const typeLabel={DataSource:'Source',ModifyModel:'Modify Model',Aggregation:'Aggregation'}[node.obj_type]||node.obj_type;
+    const hasExpr=node.col_expr&&node.col_expr.length>0;
+
+    const card=document.createElement('div');
+    let extraClass='';
+    if(node.is_root) extraClass+=' is-root';
+    if(node.is_leaf) extraClass+=' is-leaf';
+    card.className=`nc ${typeClass}${extraClass}`;
+    card.style.cssText=`left:${pos.x}px;top:${pos.y}px;width:${pos.w}px;animation-delay:${i*.04}s;`;
+    card.title=node.path;
+
+    const exprHTML=hasExpr?`
+      <div class="nc-expr">
+        <div class="nc-expr-lbl">column expression</div>
+        <div class="nc-expr-list">
+          ${node.col_expr.map(e=>`<div class="nc-expr-item">${esc(e)}</div>`).join('')}
+        </div>
+      </div>`:'';
+
+    // Decide whether to show the expand button
+    const m=node.modal||{};
+    const hasModal=(m.col&&m.col.length)||
+      (m.incoming&&m.incoming.some(inc=>inc.rows?.length||inc.joins?.length||inc.col?.length));
+
+    const flagHTML = node.is_root ? `<span class="nc-flag root">root</span>` :
+                     node.is_leaf ? `<span class="nc-flag leaf">source</span>` : '';
+
+    card.innerHTML=`
+      <div class="nc-hdr">
+        <span class="nc-type">${esc(typeLabel)}</span>
+        <div class="nc-actions">
+          ${flagHTML}
+          ${hasModal?`<button class="nc-btn" title="View all conditions" onclick="openNodeModal('${esc(node.id)}')">⊞</button>`:''}
+        </div>
+      </div>
+      <div class="nc-body">
+        <div class="nc-name">${esc(node.label)}</div>
+        ${node.datasource && node.datasource!==node.label ? `<div class="nc-meta">${esc(node.datasource)}</div>` : ''}
+      </div>
+      ${exprHTML}`;
+
+    outer.appendChild(card);
+  });
+}
+
+/* ──────────── modal ──────────── */
+function openNodeModal(nodeId){
+  const data=state.graphData; if(!data) return;
+  const node=(data.nodes||[]).find(n=>n.id===nodeId);
+  if(!node) return;
+
+  document.getElementById('modal-title').textContent=node.label||node.datasource||node.id;
+  document.getElementById('modal-sub').textContent=node.path||node.id;
+
+  const body=document.getElementById('modal-body'); body.innerHTML='';
+  const m=node.modal||{};
+
+  /* Column expressions */
+  const cols=m.col||[];
+  if(cols.length){
+    const sec=document.createElement('div');
+    sec.innerHTML=`<div class="ms-title col"><span class="ms-title-tag">COL</span><span class="ms-title-name">Column Expressions</span></div>`;
+    const list=document.createElement('div'); list.className='ms-list';
+    cols.forEach(c=>{ const d=document.createElement('div'); d.className='ms-item col'; d.textContent=c; list.appendChild(d); });
+    sec.appendChild(list); body.appendChild(sec);
+  }
+
+  /* Aggregated rows + joins from all incoming edges */
+  const incoming=m.incoming||[];
+  const allRows  = [...new Set(incoming.flatMap(inc=>inc.rows ||[]).filter(Boolean))];
+  const allJoins = [...new Set(incoming.flatMap(inc=>inc.joins||[]).filter(Boolean))];
+
+  if(allRows.length){
+    const sec=document.createElement('div');
+    sec.innerHTML=`<div class="ms-title row"><span class="ms-title-tag">ROW</span><span class="ms-title-name">Row Filters</span></div>`;
+    const list=document.createElement('div'); list.className='ms-list';
+    allRows.forEach(r=>{ const d=document.createElement('div'); d.className='ms-item row'; d.textContent=r; list.appendChild(d); });
+    sec.appendChild(list); body.appendChild(sec);
+  }
+
+  if(allJoins.length){
+    const sec=document.createElement('div');
+    sec.innerHTML=`<div class="ms-title join"><span class="ms-title-tag">JOIN</span><span class="ms-title-name">Join Conditions</span></div>`;
+    const list=document.createElement('div'); list.className='ms-list';
+    allJoins.forEach(j=>{ const d=document.createElement('div'); d.className='ms-item join'; d.textContent=j; list.appendChild(d); });
+    sec.appendChild(list); body.appendChild(sec);
+  }
+
+  if(!cols.length && !allRows.length && !allJoins.length){
+    body.innerHTML='<div class="ms-empty">No conditions recorded for this node.</div>';
+  }
+
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal(){
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
+
+/* ──────────── source details ──────────── */
+async function renderSources(section, datasources, graphNodes){
+  const usedFields={};
+  graphNodes.forEach(n=>{
+    if(n.obj_type==='DataSource' && n.datasource){
+      (usedFields[n.datasource]=usedFields[n.datasource]||new Set()).add(
+        String(n.label||'').split('.').pop()
+      );
+    }
+  });
+  section.innerHTML=`
+    <div class="ss-title">Source Details</div>
+    <div class="ss-sub">Datasources contributing to this field's lineage. Used columns are highlighted.</div>
+    <div class="ss-cards" id="ss-cards"></div>`;
+  const wrap=section.querySelector('#ss-cards');
+
+  datasources.forEach(ds=>{
+    const card=document.createElement('div'); card.className='sc';
+    const dsId=safeId(ds);
+    card.innerHTML=`
+      <div class="sc-hdr" onclick="this.parentElement.classList.toggle('open')">
+        <span class="sc-name">⬡ ${esc(ds)}</span>
+        <span class="sc-tog">▾</span>
+      </div>
+      <div class="sc-body">
+        <div class="sc-flist" id="scf-${dsId}"><div class="sc-loading">Loading…</div></div>
+      </div>`;
+    wrap.appendChild(card);
+
+    apiFetch(`/api/datasource/${encodeURIComponent(ds)}/fields?application=${encodeURIComponent(state.application)}`)
+    .then(data=>{
+      const el=document.getElementById(`scf-${dsId}`); if(!el) return;
+      const used=usedFields[ds]||new Set();
+      const fields=data.fields||[];
+      if(!fields.length){ el.innerHTML='<div class="sc-loading">No fields found.</div>'; return; }
+      const sorted=[...fields].sort((a,b)=>{
+        const au=used.has(a.field_name)?0:1, bu=used.has(b.field_name)?0:1;
+        return au-bu||String(a.field_name).localeCompare(String(b.field_name));
+      });
+      el.innerHTML=sorted.map(f=>{
+        const isUsed=used.has(f.field_name);
+        const nullStr=f.allow_nulls==='Y'||f.allow_nulls===true?'NULL':'NOT NULL';
+        return `<div class="sc-fi${isUsed?' used':''}" title="${esc(f.description||'')}">
+          <div class="sc-dot"></div>
+          <div style="flex:1;min-width:0">
+            <div>${esc(f.field_name)}${isUsed?` <span style="font-size:9px;opacity:.5">used</span>`:''}</div>
+            <div class="sc-meta">${esc(f.data_type||'')}${f.size?` (${esc(f.size)})`:''} · ${nullStr}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }).catch(()=>{
+      const el=document.getElementById(`scf-${dsId}`);
+      if(el) el.innerHTML='<div style="color:var(--rose);font-size:11px">Failed to load.</div>';
+    });
+  });
+}
+</script>
+</body>
+</html>
